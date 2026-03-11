@@ -1,18 +1,82 @@
 ---
 name: blog-scraper
 description: >
-  Scrape blog posts via RSS feeds (free, no API key) with Apify fallback for
-  JS-heavy sites. Use when you need to monitor competitor blogs, track industry
-  content, or aggregate blog posts by keyword.
+  Scrape blog posts from Substack, Beehiiv, and RSS feeds. No API key needed.
+  Includes dedicated Substack and Beehiiv scrapers using their native JSON APIs,
+  plus a generic RSS/Atom scraper with optional Apify fallback for JS-heavy sites.
 ---
 
 # Blog Scraper
 
-Scrape blog posts via RSS/Atom feeds (free) with optional Apify fallback for JS-heavy sites.
+Scrape blog posts from Substack, Beehiiv, and generic RSS/Atom feeds. No API key needed.
 
-## Quick Start
+Only dependency: `pip install requests`.
 
-For RSS mode (free), only dependency is `pip install requests`. No API key needed.
+---
+
+## Substack Scraper
+
+Scrape any Substack publication (subdomain or custom domain) via the public `/api/v1/archive` JSON endpoint.
+
+```bash
+# Summary table of recent posts
+python3 skills/blog-scraper/scripts/scrape_substack.py \
+  --url "https://newsletter.substack.com" --days 30 --output summary
+
+# JSON with keyword filter
+python3 skills/blog-scraper/scripts/scrape_substack.py \
+  --url "https://www.lennysnewsletter.com" --keywords "AI" --output json
+
+# Full post content (HTML body)
+python3 skills/blog-scraper/scripts/scrape_substack.py \
+  --url "https://newsletter.substack.com" --full-content --output json
+```
+
+**How it works:**
+- Resolves custom domains to Substack base URLs automatically
+- Paginates through `/api/v1/archive` (12 posts per page)
+- `--full-content` fetches each post via `/api/v1/posts/{slug}` for full HTML body
+- Returns: title, subtitle, slug, URL, date, author, tags, word count, reading time, reactions, comments, paid status
+
+## Beehiiv Scraper
+
+Scrape any Beehiiv publication (including custom domains) via the hidden `/posts` JSON endpoint.
+
+```bash
+# Summary table
+python3 skills/blog-scraper/scripts/scrape_beehiiv.py \
+  --url "https://www.growthunhinged.com" --days 30 --output summary
+
+# JSON with keyword filter
+python3 skills/blog-scraper/scripts/scrape_beehiiv.py \
+  --url "https://www.growthunhinged.com" --keywords "pricing" --output json
+
+# Full post content
+python3 skills/blog-scraper/scripts/scrape_beehiiv.py \
+  --url "https://www.growthunhinged.com" --full-content --output json
+```
+
+**How it works:**
+- Paginates through `/posts?page=N&perPage=30` with deduplication
+- `--full-content` scrapes each post page and extracts body from Remix context data
+- Returns: title, subtitle, slug, URL, date, author, tags, reading time, premium status
+
+## Substack / Beehiiv CLI Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--url` | *required* | Newsletter URL |
+| `--keywords` | none | Filter by keywords (comma-separated, OR logic) |
+| `--days` | all | Only include posts from last N days |
+| `--max-posts` | all | Max posts to return |
+| `--full-content` | false | Fetch full post body (slower) |
+| `--output` | summary | `summary` (table) or `json` |
+
+---
+
+## Generic RSS/Atom Scraper
+
+Scrape any blog via RSS/Atom feed discovery, with optional Apify fallback for JS-heavy sites.
 
 ```bash
 # Scrape a blog's RSS feed
@@ -28,23 +92,12 @@ python3 skills/blog-scraper/scripts/scrape_blogs.py \
   --urls "https://example.com" --mode apify
 ```
 
-## How It Works
+**How it works:**
+1. Discovers RSS/Atom feeds via `<link rel="alternate">` tags and common paths (`/feed`, `/rss`, `/atom.xml`, etc.)
+2. Parses feeds (RSS 2.0 and Atom)
+3. Falls back to Apify `jupri/rss-xml-scraper` if RSS fails (when token available)
 
-### Auto Mode (default)
-1. For each URL, tries to discover an RSS/Atom feed:
-   - Checks HTML `<link rel="alternate">` tags
-   - Probes common paths: `/feed`, `/rss`, `/atom.xml`, `/feed.xml`, `/rss.xml`, `/blog/feed`, `/index.xml`
-2. Parses discovered feeds (supports RSS 2.0 and Atom)
-3. If any URLs fail, falls back to Apify `jupri/rss-xml-scraper` (if token available)
-4. Applies date and keyword filtering client-side
-
-### RSS Mode
-Only tries RSS feeds, no Apify fallback.
-
-### Apify Mode
-Uses Apify actor directly, skipping RSS discovery.
-
-## CLI Reference
+### RSS CLI Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -59,5 +112,4 @@ Uses Apify actor directly, skipping RSS discovery.
 
 ## Cost
 
-- **RSS mode:** Free (no API, no tokens)
-- **Apify mode:** Uses `jupri/rss-xml-scraper` — minimal Apify credits
+All scrapers are **free** — no API keys or tokens needed. Apify fallback (RSS scraper only) uses minimal credits.
